@@ -178,6 +178,11 @@ typedef struct lwlock_stats
 	int			block_count;
 	int			dequeue_self_count;
 	int			spin_delay_count;
+#ifdef LWLOCK_STATS_QUEUE_SIZES
+	int			sh_acquire_max;
+	int			ex_acquire_max;
+	int			max_waiters;
+#endif
 }	lwlock_stats;
 
 static HTAB *lwlock_stats_htab;
@@ -283,12 +288,24 @@ print_lwlock_stats(int code, Datum arg)
 
 	while ((lwstats = (lwlock_stats *) hash_seq_search(&scan)) != NULL)
 	{
+#ifdef LWLOCK_STATS_QUEUE_SIZES
+		/* We ignore information from MainLWLockArray[0] since it isn't in real use */
+		if (lwstats->key.tranche != 0)
+			fprintf(stderr,
+					"PID %d lwlock %s %p: shacq %u shmax %u exacq %u exmax %u blk %u spindelay %u dequeue self %u maxw %u\n",
+					MyProcPid, LWLockTrancheArray[lwstats->key.tranche], lwstats->key.instance,
+					lwstats->sh_acquire_count, lwstats->sh_acquire_max,
+					lwstats->ex_acquire_count, lwstats->ex_acquire_max,
+					lwstats->block_count, lwstats->spin_delay_count, lwstats->dequeue_self_count,
+					lwstats->max_waiters);
+#else
 		fprintf(stderr,
 				"PID %d lwlock %s %p: shacq %u exacq %u blk %u spindelay %u dequeue self %u\n",
 				MyProcPid, LWLockTrancheArray[lwstats->key.tranche],
 				lwstats->key.instance, lwstats->sh_acquire_count,
 				lwstats->ex_acquire_count, lwstats->block_count,
 				lwstats->spin_delay_count, lwstats->dequeue_self_count);
+#endif
 	}
 
 	LWLockRelease(&MainLWLockArray[0].lock);
@@ -320,6 +337,11 @@ get_lwlock_stats_entry(LWLock *lock)
 		lwstats->block_count = 0;
 		lwstats->dequeue_self_count = 0;
 		lwstats->spin_delay_count = 0;
+#ifdef LWLOCK_STATS_QUEUE_SIZES
+		lwstats->sh_acquire_max = 0;
+		lwstats->ex_acquire_max = 0;
+		lwstats->max_waiters = 0;
+#endif
 	}
 	return lwstats;
 }
@@ -971,7 +993,16 @@ LWLockWakeup(LWLock *lock)
 static void
 LWLockQueueSelf(LWLock *lock, LWLockMode mode)
 {
-	/*
+#ifdef LWLOCK_STATS_QUEUE_SIZES
+	bool include;
+	int counter, size;
+	proclist_iter iter;
+	lwlock_stats *lwstats;
+
+	lwstats = get_lwlock_stats_entry(lock);
+#endif	
+
+    /*
 	 * If we don't have a PGPROC structure, there's no way to wait. This
 	 * should never occur, since MyProc should only be null during shared
 	 * memory initialization.
@@ -990,6 +1021,48 @@ LWLockQueueSelf(LWLock *lock, LWLockMode mode)
 	MyProc->lwWaiting = true;
 	MyProc->lwWaitMode = mode;
 
+#ifdef LWLOCK_STATS_QUEUE_SIZES
+	/*
+	 * We scan the list of waiters from the back in order to find
+	 * out how many of the same lock type are waiting for a lock.
+	 * Similar types have the potential to be groupped together.
+	 *
+	 * We also count the number of waiters, including ourself.
+	 */
+	include = true;
+	size = 1;
+	counter = 1;
+
+	proclist_reverse_foreach(iter, &lock->waiters, lwWaitLink)
+	{
+		if (include)
+		{
+			PGPROC	   *waiter = GetPGProcByNumber(iter.cur);
+
+			if (waiter->lwWaitMode == mode)
+				counter += 1;
+			else
+				include = false;
+		}
+		
+		size += 1;
+	}
+
+	if (mode == LW_EXCLUSIVE || mode == LW_WAIT_UNTIL_FREE)
+	{
+		if (counter > lwstats->ex_acquire_max)
+			lwstats->ex_acquire_max = counter;
+	}
+	else if (mode == LW_SHARED)
+	{
+		if (counter > lwstats->sh_acquire_max)
+			lwstats->sh_acquire_max = counter;
+	}
+
+	if (size > lwstats->max_waiters)
+		lwstats->max_waiters = size;
+#endif
+	
 	/* LW_WAIT_UNTIL_FREE waiters are always at the front of the queue */
 	if (mode == LW_WAIT_UNTIL_FREE)
 		proclist_push_head(&lock->waiters, MyProc->pgprocno, lwWaitLink);
@@ -1126,9 +1199,21 @@ LWLockAcquire(LWLock *lock, LWLockMode mode)
 #ifdef LWLOCK_STATS
 	/* Count lock acquisition attempts */
 	if (mode == LW_EXCLUSIVE)
+	{
 		lwstats->ex_acquire_count++;
+#ifdef LWLOCK_STATS_QUEUE_SIZES
+		if (lwstats->ex_acquire_max == 0)
+			lwstats->ex_acquire_max = 1;
+#endif
+	}
 	else
+	{
 		lwstats->sh_acquire_count++;
+#ifdef LWLOCK_STATS_QUEUE_SIZES
+		if (lwstats->sh_acquire_max == 0)
+			lwstats->sh_acquire_max = 1;
+#endif
+	}
 #endif   /* LWLOCK_STATS */
 
 	/*

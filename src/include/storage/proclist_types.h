@@ -34,6 +34,15 @@ typedef struct proclist_head
 } proclist_head;
 
 /*
+ * List iterator not allowing modifications while iterating.
+ */
+typedef struct proclist_iter
+{
+	int			cur;			/* pgprocno of the current PGPROC */
+	int			end;			/* pgprocno of the end PGPROC */
+} proclist_iter;
+
+/*
  * List iterator allowing some modifications while iterating.
  */
 typedef struct proclist_mutable_iter

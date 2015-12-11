@@ -205,4 +205,18 @@ proclist_pop_head_node_offset(proclist_head *list, size_t node_offset)
 			 proclist_node_get((iter).cur,									\
 							   offsetof(PGPROC, link_member))->next)
 
+
+/*
+ * Iterate through the list in reverse order.
+ *
+ * It is *not* allowed to manipulate the list during iteration.
+ */
+#define proclist_reverse_foreach(iter, lhead, link_member)	\
+	for (AssertVariableIsOfTypeMacro(iter, proclist_iter),			\
+		 AssertVariableIsOfTypeMacro(lhead, proclist_head *),		\
+			 (iter).cur = (lhead)->tail,							\
+			 (iter).end = (lhead)->head;                            \
+     		 (iter).cur != (iter).end;								\
+		     (iter).cur =  proclist_node_get((iter).cur,									\
+											 offsetof(PGPROC, link_member))->prev)
 #endif
