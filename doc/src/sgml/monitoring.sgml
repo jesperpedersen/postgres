@@ -3841,21 +3841,21 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
     </row>
     <row>
      <entry><literal>lwlock-acquire</literal></entry>
-     <entry><literal>(char *, LWLockMode)</literal></entry>
+     <entry><literal>(int, LWLockMode)</literal></entry>
      <entry>Probe that fires when an LWLock has been acquired.
       arg0 is the LWLock's tranche.
       arg1 is the requested lock mode, either exclusive or shared.</entry>
     </row>
     <row>
      <entry><literal>lwlock-release</literal></entry>
-     <entry><literal>(char *)</literal></entry>
+     <entry><literal>(int)</literal></entry>
      <entry>Probe that fires when an LWLock has been released (but note
       that any released waiters have not yet been awakened).
       arg0 is the LWLock's tranche.</entry>
     </row>
     <row>
      <entry><literal>lwlock-wait-start</literal></entry>
-     <entry><literal>(char *, LWLockMode)</literal></entry>
+     <entry><literal>(int, LWLockMode)</literal></entry>
      <entry>Probe that fires when an LWLock was not immediately available and
       a server process has begun to wait for the lock to become available.
       arg0 is the LWLock's tranche.
@@ -3863,7 +3863,7 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
     </row>
     <row>
      <entry><literal>lwlock-wait-done</literal></entry>
-     <entry><literal>(char *, LWLockMode)</literal></entry>
+     <entry><literal>(int, LWLockMode)</literal></entry>
      <entry>Probe that fires when a server process has been released from its
       wait for an LWLock (it does not actually have the lock yet).
       arg0 is the LWLock's tranche.
@@ -3871,7 +3871,7 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
     </row>
     <row>
      <entry><literal>lwlock-condacquire</literal></entry>
-     <entry><literal>(char *, LWLockMode)</literal></entry>
+     <entry><literal>(int, LWLockMode)</literal></entry>
      <entry>Probe that fires when an LWLock was successfully acquired when the
       caller specified no waiting.
       arg0 is the LWLock's tranche.
@@ -3879,7 +3879,7 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
     </row>
     <row>
      <entry><literal>lwlock-condacquire-fail</literal></entry>
-     <entry><literal>(char *, LWLockMode)</literal></entry>
+     <entry><literal>(int, LWLockMode)</literal></entry>
      <entry>Probe that fires when an LWLock was not successfully acquired when
       the caller specified no waiting.
       arg0 is the LWLock's tranche.

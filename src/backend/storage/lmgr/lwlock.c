@@ -114,8 +114,8 @@ extern slock_t *ShmemLock;
 static char **LWLockTrancheArray = NULL;
 static int	LWLockTranchesAllocated = 0;
 
-#define T_NAME(lock) \
-	(LWLockTrancheArray[(lock)->tranche])
+#define T_ID(lock) \
+	((lock)->tranche)
 
 /*
  * This points to the main array of LWLocks in shared memory.  Backends inherit
@@ -198,9 +198,9 @@ PRINT_LWDEBUG(const char *where, LWLock *lock, LWLockMode mode)
 		ereport(LOG,
 				(errhidestmt(true),
 				 errhidecontext(true),
-				 errmsg_internal("%d: %s(%s %p): excl %u shared %u haswaiters %u waiters %u rOK %d",
+				 errmsg_internal("%d: %s(%d %p): excl %u shared %u haswaiters %u waiters %u rOK %d",
 								 MyProcPid,
-								 where, T_NAME(lock), lock,
+								 where, T_ID(lock), lock,
 								 (state & LW_VAL_EXCLUSIVE) != 0,
 								 state & LW_SHARED_MASK,
 								 (state & LW_FLAG_HAS_WAITERS) != 0,
@@ -218,8 +218,8 @@ LOG_LWDEBUG(const char *where, LWLock *lock, const char *msg)
 		ereport(LOG,
 				(errhidestmt(true),
 				 errhidecontext(true),
-				 errmsg_internal("%s(%s %p): %s", where,
-								 T_NAME(lock), lock, msg)));
+				 errmsg_internal("%s(%d %p): %s", where,
+								 T_ID(lock), lock, msg)));
 	}
 }
 
@@ -1226,7 +1226,7 @@ LWLockAcquire(LWLock *lock, LWLockMode mode)
 #endif
 
 		LWLockReportWaitStart(lock);
-		TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_NAME(lock), (int) mode);
+		TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_ID(lock), (int) mode);
 
 		for (;;)
 		{
@@ -1248,7 +1248,7 @@ LWLockAcquire(LWLock *lock, LWLockMode mode)
 		}
 #endif
 
-		TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_NAME(lock), (int) mode);
+		TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_ID(lock), (int) mode);
 		LWLockReportWaitEnd();
 
 		LOG_LWDEBUG("LWLockAcquire", lock, "awakened");
@@ -1257,7 +1257,7 @@ LWLockAcquire(LWLock *lock, LWLockMode mode)
 		result = false;
 	}
 
-	TRACE_POSTGRESQL_LWLOCK_ACQUIRE(T_NAME(lock), (int) mode);
+	TRACE_POSTGRESQL_LWLOCK_ACQUIRE(T_ID(lock), (int) mode);
 
 	/* Add lock to list of locks held by this backend */
 	held_lwlocks[num_held_lwlocks].lock = lock;
@@ -1308,14 +1308,14 @@ LWLockConditionalAcquire(LWLock *lock, LWLockMode mode)
 		RESUME_INTERRUPTS();
 
 		LOG_LWDEBUG("LWLockConditionalAcquire", lock, "failed");
-		TRACE_POSTGRESQL_LWLOCK_CONDACQUIRE_FAIL(T_NAME(lock), (int) mode);
+		TRACE_POSTGRESQL_LWLOCK_CONDACQUIRE_FAIL(T_ID(lock), (int) mode);
 	}
 	else
 	{
 		/* Add lock to list of locks held by this backend */
 		held_lwlocks[num_held_lwlocks].lock = lock;
 		held_lwlocks[num_held_lwlocks++].mode = mode;
-		TRACE_POSTGRESQL_LWLOCK_CONDACQUIRE(T_NAME(lock), (int) mode);
+		TRACE_POSTGRESQL_LWLOCK_CONDACQUIRE(T_ID(lock), (int) mode);
 	}
 	return !mustwait;
 }
@@ -1387,7 +1387,7 @@ LWLockAcquireOrWait(LWLock *lock, LWLockMode mode)
 #endif
 
 			LWLockReportWaitStart(lock);
-			TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_NAME(lock), (int) mode);
+			TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_ID(lock), (int) mode);
 
 			for (;;)
 			{
@@ -1405,7 +1405,7 @@ LWLockAcquireOrWait(LWLock *lock, LWLockMode mode)
 				Assert(nwaiters < MAX_BACKENDS);
 			}
 #endif
-			TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_NAME(lock), (int) mode);
+			TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_ID(lock), (int) mode);
 			LWLockReportWaitEnd();
 
 			LOG_LWDEBUG("LWLockAcquireOrWait", lock, "awakened");
@@ -1435,7 +1435,7 @@ LWLockAcquireOrWait(LWLock *lock, LWLockMode mode)
 		/* Failed to get lock, so release interrupt holdoff */
 		RESUME_INTERRUPTS();
 		LOG_LWDEBUG("LWLockAcquireOrWait", lock, "failed");
-		TRACE_POSTGRESQL_LWLOCK_ACQUIRE_OR_WAIT_FAIL(T_NAME(lock), (int) mode);
+		TRACE_POSTGRESQL_LWLOCK_ACQUIRE_OR_WAIT_FAIL(T_ID(lock), (int) mode);
 	}
 	else
 	{
@@ -1443,7 +1443,7 @@ LWLockAcquireOrWait(LWLock *lock, LWLockMode mode)
 		/* Add lock to list of locks held by this backend */
 		held_lwlocks[num_held_lwlocks].lock = lock;
 		held_lwlocks[num_held_lwlocks++].mode = mode;
-		TRACE_POSTGRESQL_LWLOCK_ACQUIRE_OR_WAIT(T_NAME(lock), (int) mode);
+		TRACE_POSTGRESQL_LWLOCK_ACQUIRE_OR_WAIT(T_ID(lock), (int) mode);
 	}
 
 	return !mustwait;
@@ -1603,7 +1603,7 @@ LWLockWaitForVar(LWLock *lock, uint64 *valptr, uint64 oldval, uint64 *newval)
 #endif
 
 		LWLockReportWaitStart(lock);
-		TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_NAME(lock), LW_EXCLUSIVE);
+		TRACE_POSTGRESQL_LWLOCK_WAIT_START(T_ID(lock), LW_EXCLUSIVE);
 
 		for (;;)
 		{
@@ -1622,7 +1622,7 @@ LWLockWaitForVar(LWLock *lock, uint64 *valptr, uint64 oldval, uint64 *newval)
 		}
 #endif
 
-		TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_NAME(lock), LW_EXCLUSIVE);
+		TRACE_POSTGRESQL_LWLOCK_WAIT_DONE(T_ID(lock), LW_EXCLUSIVE);
 		LWLockReportWaitEnd();
 
 		LOG_LWDEBUG("LWLockWaitForVar", lock, "awakened");
@@ -1630,7 +1630,7 @@ LWLockWaitForVar(LWLock *lock, uint64 *valptr, uint64 oldval, uint64 *newval)
 		/* Now loop back and check the status of the lock again. */
 	}
 
-	TRACE_POSTGRESQL_LWLOCK_ACQUIRE(T_NAME(lock), LW_EXCLUSIVE);
+	TRACE_POSTGRESQL_LWLOCK_ACQUIRE(T_ID(lock), LW_EXCLUSIVE);
 
 	/*
 	 * Fix the process wait semaphore's count for any absorbed wakeups.
@@ -1728,7 +1728,7 @@ LWLockRelease(LWLock *lock)
 			break;
 
 	if (i < 0)
-		elog(ERROR, "lock %s is not held", T_NAME(lock));
+		elog(ERROR, "lock %s is not held", T_ID(lock));
 
 	mode = held_lwlocks[i].mode;
 
@@ -1773,7 +1773,7 @@ LWLockRelease(LWLock *lock)
 		LWLockWakeup(lock);
 	}
 
-	TRACE_POSTGRESQL_LWLOCK_RELEASE(T_NAME(lock));
+	TRACE_POSTGRESQL_LWLOCK_RELEASE(T_ID(lock));
 
 	/*
 	 * Now okay to allow cancel/die interrupts.
