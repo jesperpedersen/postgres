@@ -15,6 +15,7 @@
 #define TRANSAM_H
 
 #include "access/xlogdefs.h"
+#include "port/atomics.h"
 
 
 /* ----------------
@@ -114,7 +115,7 @@ typedef struct VariableCacheData
 	/*
 	 * These fields are protected by XidGenLock.
 	 */
-	TransactionId nextXid;		/* next XID to assign */
+	pg_atomic_uint32 nextXid;		/* next XID to assign */
 
 	TransactionId oldestXid;	/* cluster-wide minimum datfrozenxid */
 	TransactionId xidVacLimit;	/* start forcing autovacuums here */
@@ -175,6 +176,7 @@ extern TransactionId TransactionIdLatest(TransactionId mainxid,
 extern XLogRecPtr TransactionIdGetCommitLSN(TransactionId xid);
 
 /* in transam/varsup.c */
+extern TransactionId TransactionIdAdvanceAtomic(pg_atomic_uint32* xid);
 extern TransactionId GetNewTransactionId(bool isSubXact);
 extern TransactionId ReadNewTransactionId(void);
 extern void SetTransactionIdLimit(TransactionId oldest_datfrozenxid,

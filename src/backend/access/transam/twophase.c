@@ -93,6 +93,7 @@
 #include "miscadmin.h"
 #include "pg_trace.h"
 #include "pgstat.h"
+#include "port/atomics.h"
 #include "replication/origin.h"
 #include "replication/syncrep.h"
 #include "replication/walsender.h"
@@ -1789,7 +1790,7 @@ restoreTwoPhaseData(void)
 TransactionId
 PrescanPreparedTransactions(TransactionId **xids_p, int *nxids_p)
 {
-	TransactionId origNextXid = ShmemVariableCache->nextXid;
+	TransactionId origNextXid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 	TransactionId result = origNextXid;
 	TransactionId *xids = NULL;
 	int			nxids = 0;
@@ -2014,7 +2015,7 @@ ProcessTwoPhaseBuffer(TransactionId xid,
 					  bool fromdisk,
 					  bool setParent, bool setNextXid)
 {
-	TransactionId origNextXid = ShmemVariableCache->nextXid;
+	TransactionId origNextXid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 	TransactionId *subxids;
 	char	   *buf;
 	TwoPhaseFileHeader *hdr;
@@ -2122,7 +2123,7 @@ ProcessTwoPhaseBuffer(TransactionId xid,
 		/* update nextXid if needed */
 		if (setNextXid &&
 			TransactionIdFollowsOrEquals(subxid,
-										 ShmemVariableCache->nextXid))
+										 (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid))))
 		{
 			/*
 			 * We don't expect anyone else to modify nextXid, hence we don't
@@ -2131,10 +2132,10 @@ ProcessTwoPhaseBuffer(TransactionId xid,
 			 */
 			LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
 			if (TransactionIdFollowsOrEquals(subxid,
-											 ShmemVariableCache->nextXid))
+											 (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid))))
 			{
-				ShmemVariableCache->nextXid = subxid;
-				TransactionIdAdvance(ShmemVariableCache->nextXid);
+				pg_atomic_write_u32(&(ShmemVariableCache->nextXid), (uint32)subxid);
+				TransactionIdAdvanceAtomic(&(ShmemVariableCache->nextXid));
 			}
 			LWLockRelease(XidGenLock);
 		}

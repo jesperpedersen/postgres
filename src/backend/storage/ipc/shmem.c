@@ -67,6 +67,7 @@
 
 #include "access/transam.h"
 #include "miscadmin.h"
+#include "port/atomics.h"
 #include "storage/lwlock.h"
 #include "storage/pg_shmem.h"
 #include "storage/shmem.h"
@@ -144,6 +145,7 @@ InitShmemAllocation(void)
 	ShmemVariableCache = (VariableCache)
 		ShmemAlloc(sizeof(*ShmemVariableCache));
 	memset(ShmemVariableCache, 0, sizeof(*ShmemVariableCache));
+	pg_atomic_init_u32(&(ShmemVariableCache->nextXid), 0);
 }
 
 /*

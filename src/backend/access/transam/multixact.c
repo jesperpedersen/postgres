@@ -82,6 +82,7 @@
 #include "lib/ilist.h"
 #include "miscadmin.h"
 #include "pg_trace.h"
+#include "port/atomics.h"
 #include "postmaster/autovacuum.h"
 #include "storage/lmgr.h"
 #include "storage/pmsignal.h"
@@ -3284,11 +3285,11 @@ multixact_redo(XLogReaderState *record)
 		 * acquire the lock to modify it, though.
 		 */
 		if (TransactionIdFollowsOrEquals(max_xid,
-										 ShmemVariableCache->nextXid))
+										 (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid))))
 		{
 			LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
-			ShmemVariableCache->nextXid = max_xid;
-			TransactionIdAdvance(ShmemVariableCache->nextXid);
+			pg_atomic_write_u32(&(ShmemVariableCache->nextXid), (uint32)max_xid);
+			TransactionIdAdvanceAtomic(&(ShmemVariableCache->nextXid));
 			LWLockRelease(XidGenLock);
 		}
 	}

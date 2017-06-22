@@ -38,6 +38,7 @@
 #include "access/xlog.h"
 #include "access/xloginsert.h"
 #include "access/xlogutils.h"
+#include "port/atomics.h"
 #include "miscadmin.h"
 #include "pg_trace.h"
 
@@ -506,7 +507,7 @@ ZeroCLOGPage(int pageno, bool writeXlog)
 void
 StartupCLOG(void)
 {
-	TransactionId xid = ShmemVariableCache->nextXid;
+	TransactionId xid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 	int			pageno = TransactionIdToPage(xid);
 
 	LWLockAcquire(CLogControlLock, LW_EXCLUSIVE);
@@ -525,7 +526,7 @@ StartupCLOG(void)
 void
 TrimCLOG(void)
 {
-	TransactionId xid = ShmemVariableCache->nextXid;
+	TransactionId xid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 	int			pageno = TransactionIdToPage(xid);
 
 	LWLockAcquire(CLogControlLock, LW_EXCLUSIVE);

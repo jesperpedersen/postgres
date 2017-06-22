@@ -32,6 +32,7 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "pg_trace.h"
+#include "port/atomics.h"
 #include "storage/shmem.h"
 #include "utils/builtins.h"
 #include "utils/snapmgr.h"
@@ -644,7 +645,7 @@ ActivateCommitTs(void)
 	}
 	LWLockRelease(CommitTsLock);
 
-	xid = ShmemVariableCache->nextXid;
+	xid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 	pageno = TransactionIdToCTsPage(xid);
 
 	/*

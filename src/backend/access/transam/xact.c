@@ -41,6 +41,7 @@
 #include "libpq/pqsignal.h"
 #include "miscadmin.h"
 #include "pgstat.h"
+#include "port/atomics.h"
 #include "replication/logical.h"
 #include "replication/logicallauncher.h"
 #include "replication/origin.h"
@@ -5362,11 +5363,11 @@ xact_redo_commit(xl_xact_parsed_commit *parsed,
 	 * it, though.
 	 */
 	if (TransactionIdFollowsOrEquals(max_xid,
-									 ShmemVariableCache->nextXid))
+									 (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid))))
 	{
 		LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
-		ShmemVariableCache->nextXid = max_xid;
-		TransactionIdAdvance(ShmemVariableCache->nextXid);
+		pg_atomic_write_u32(&(ShmemVariableCache->nextXid), (uint32)max_xid);
+		TransactionIdAdvanceAtomic(&(ShmemVariableCache->nextXid));
 		LWLockRelease(XidGenLock);
 	}
 
@@ -5533,11 +5534,11 @@ xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid)
 								  parsed->subxacts);
 
 	if (TransactionIdFollowsOrEquals(max_xid,
-									 ShmemVariableCache->nextXid))
+									 (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid))))
 	{
 		LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
-		ShmemVariableCache->nextXid = max_xid;
-		TransactionIdAdvance(ShmemVariableCache->nextXid);
+		pg_atomic_write_u32(&(ShmemVariableCache->nextXid), (uint32)max_xid);
+		TransactionIdAdvanceAtomic(&(ShmemVariableCache->nextXid));
 		LWLockRelease(XidGenLock);
 	}
 

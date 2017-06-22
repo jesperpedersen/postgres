@@ -32,6 +32,7 @@
 #include "access/subtrans.h"
 #include "access/transam.h"
 #include "pg_trace.h"
+#include "port/atomics.h"
 #include "utils/snapmgr.h"
 
 
@@ -261,7 +262,7 @@ StartupSUBTRANS(TransactionId oldestActiveXID)
 	LWLockAcquire(SubtransControlLock, LW_EXCLUSIVE);
 
 	startPage = TransactionIdToPage(oldestActiveXID);
-	endPage = TransactionIdToPage(ShmemVariableCache->nextXid);
+	endPage = TransactionIdToPage((TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid)));
 
 	while (startPage != endPage)
 	{

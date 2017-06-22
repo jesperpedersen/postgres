@@ -193,6 +193,7 @@
 #include "access/xlog.h"
 #include "miscadmin.h"
 #include "pgstat.h"
+#include "port/atomics.h"
 #include "storage/bufmgr.h"
 #include "storage/predicate.h"
 #include "storage/predicate_internals.h"
@@ -3301,7 +3302,7 @@ ReleasePredicateLocks(bool isCommit)
 	 * transaction to complete before freeing some RAM; correctness of visible
 	 * behavior is not affected.
 	 */
-	MySerializableXact->finishedBefore = ShmemVariableCache->nextXid;
+	MySerializableXact->finishedBefore = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 
 	/*
 	 * If it's not a commit it's a rollback, and we can clear our locks

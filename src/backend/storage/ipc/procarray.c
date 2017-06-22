@@ -54,6 +54,7 @@
 #include "catalog/catalog.h"
 #include "miscadmin.h"
 #include "pgstat.h"
+#include "port/atomics.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
 #include "storage/spin.h"
@@ -886,10 +887,10 @@ ProcArrayApplyRecoveryInfo(RunningTransactions running)
 	 */
 	nextXid = latestObservedXid;
 	TransactionIdAdvance(nextXid);
-	if (TransactionIdFollows(nextXid, ShmemVariableCache->nextXid))
+	if (TransactionIdFollows(nextXid, (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid))))
 	{
 		LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
-		ShmemVariableCache->nextXid = nextXid;
+		pg_atomic_write_u32(&(ShmemVariableCache->nextXid), (uint32)nextXid);
 		LWLockRelease(XidGenLock);
 	}
 
@@ -1983,7 +1984,7 @@ GetRunningTransactionData(void)
 
 	latestCompletedXid = ShmemVariableCache->latestCompletedXid;
 
-	oldestRunningXid = ShmemVariableCache->nextXid;
+	oldestRunningXid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 
 	/*
 	 * Spin over procArray collecting all xids
@@ -2059,7 +2060,7 @@ GetRunningTransactionData(void)
 	CurrentRunningXacts->xcnt = count - subcount;
 	CurrentRunningXacts->subxcnt = subcount;
 	CurrentRunningXacts->subxid_overflow = suboverflowed;
-	CurrentRunningXacts->nextXid = ShmemVariableCache->nextXid;
+	CurrentRunningXacts->nextXid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 	CurrentRunningXacts->oldestRunningXid = oldestRunningXid;
 	CurrentRunningXacts->latestCompletedXid = latestCompletedXid;
 
@@ -2105,7 +2106,7 @@ GetOldestActiveTransactionId(void)
 	 * the LWLockAcquire above will have done any necessary memory
 	 * interlocking.
 	 */
-	oldestRunningXid = ShmemVariableCache->nextXid;
+	oldestRunningXid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 
 	/*
 	 * Spin over procArray collecting all xids and subxids.
@@ -2172,7 +2173,7 @@ GetOldestSafeDecodingTransactionId(bool catalogOnly)
 	 * a safe, albeit pessimal, value.
 	 */
 	LWLockAcquire(XidGenLock, LW_SHARED);
-	oldestSafeXid = ShmemVariableCache->nextXid;
+	oldestSafeXid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 
 	/*
 	 * If there's already a slot pegging the xmin horizon, we can start with
@@ -3230,7 +3231,7 @@ RecordKnownAssignedTransactionIds(TransactionId xid)
 		next_expected_xid = latestObservedXid;
 		TransactionIdAdvance(next_expected_xid);
 		LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
-		ShmemVariableCache->nextXid = next_expected_xid;
+		pg_atomic_write_u32(&(ShmemVariableCache->nextXid), (uint32)next_expected_xid);
 		LWLockRelease(XidGenLock);
 	}
 }

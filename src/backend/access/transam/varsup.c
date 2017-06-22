@@ -21,6 +21,7 @@
 #include "access/xlog.h"
 #include "commands/dbcommands.h"
 #include "miscadmin.h"
+#include "port/atomics.h"
 #include "postmaster/autovacuum.h"
 #include "storage/pmsignal.h"
 #include "storage/proc.h"
@@ -33,6 +34,34 @@
 /* pointer to "variable cache" in shared memory (set up by shmem.c) */
 VariableCache ShmemVariableCache = NULL;
 
+
+/*
+ * Advance the atomic XID instance.
+ *
+ * Note, that this method only requires a lock strength of LW_SHARED
+ * as it will upgrade the lock in case of a wrap around.
+ */
+TransactionId
+TransactionIdAdvanceAtomic(pg_atomic_uint32* xid)
+{
+	TransactionId tid = (TransactionId)pg_atomic_add_fetch_u32(xid, 1);
+	if (tid < FirstNormalTransactionId)
+	{
+		LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
+		tid = (TransactionId)pg_atomic_read_u32(xid);
+		if (tid < FirstNormalTransactionId)
+		{
+			tid = FirstNormalTransactionId;
+			pg_atomic_write_u32(xid, tid);
+		}
+		else
+		{
+			tid = (TransactionId)pg_atomic_add_fetch_u32(xid, 1);
+		}
+		LWLockRelease(XidGenLock);
+	}
+	return tid;
+}
 
 /*
  * Allocate the next XID for a new transaction or subtransaction.
@@ -71,9 +100,8 @@ GetNewTransactionId(bool isSubXact)
 	if (RecoveryInProgress())
 		elog(ERROR, "cannot assign TransactionIds during recovery");
 
-	LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
-
-	xid = ShmemVariableCache->nextXid;
+	//xid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
+	xid = TransactionIdAdvanceAtomic(&(ShmemVariableCache->nextXid));
 
 	/*----------
 	 * Check to see if it's safe to assign another XID.  This protects against
@@ -97,6 +125,9 @@ GetNewTransactionId(bool isSubXact)
 		 * possibility of deadlock while doing get_database_name(). First,
 		 * copy all the shared values we'll need in this path.
 		 */
+
+		LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
+
 		TransactionId xidWarnLimit = ShmemVariableCache->xidWarnLimit;
 		TransactionId xidStopLimit = ShmemVariableCache->xidStopLimit;
 		TransactionId xidWrapLimit = ShmemVariableCache->xidWrapLimit;
@@ -155,8 +186,9 @@ GetNewTransactionId(bool isSubXact)
 		}
 
 		/* Re-acquire lock and start over */
-		LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
-		xid = ShmemVariableCache->nextXid;
+		//LWLockAcquire(XidGenLock, LW_SHARED);
+		//xid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
+		xid = TransactionIdAdvanceAtomic(&(ShmemVariableCache->nextXid));
 	}
 
 	/*
@@ -168,9 +200,13 @@ GetNewTransactionId(bool isSubXact)
 	 *
 	 * Extend pg_subtrans and pg_commit_ts too.
 	 */
+	LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
+
 	ExtendCLOG(xid);
 	ExtendCommitTs(xid);
 	ExtendSUBTRANS(xid);
+
+	LWLockRelease(XidGenLock);
 
 	/*
 	 * Now advance the nextXid counter.  This must not happen until after we
@@ -178,7 +214,7 @@ GetNewTransactionId(bool isSubXact)
 	 * want the next incoming transaction to try it again.  We cannot assign
 	 * more XIDs until there is CLOG space for them.
 	 */
-	TransactionIdAdvance(ShmemVariableCache->nextXid);
+	//TransactionIdAdvanceAtomic(&(ShmemVariableCache->nextXid));
 
 	/*
 	 * We must store the new XID into the shared ProcArray before releasing
@@ -238,7 +274,7 @@ GetNewTransactionId(bool isSubXact)
 		}
 	}
 
-	LWLockRelease(XidGenLock);
+	//LWLockRelease(XidGenLock);
 
 	return xid;
 }
@@ -252,7 +288,7 @@ ReadNewTransactionId(void)
 	TransactionId xid;
 
 	LWLockAcquire(XidGenLock, LW_SHARED);
-	xid = ShmemVariableCache->nextXid;
+	xid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 	LWLockRelease(XidGenLock);
 
 	return xid;
@@ -359,7 +395,7 @@ SetTransactionIdLimit(TransactionId oldest_datfrozenxid, Oid oldest_datoid)
 	ShmemVariableCache->xidStopLimit = xidStopLimit;
 	ShmemVariableCache->xidWrapLimit = xidWrapLimit;
 	ShmemVariableCache->oldestXidDB = oldest_datoid;
-	curXid = ShmemVariableCache->nextXid;
+	curXid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 	LWLockRelease(XidGenLock);
 
 	/* Log the info */
@@ -435,7 +471,7 @@ ForceTransactionIdLimitUpdate(void)
 
 	/* Locking is probably not really necessary, but let's be careful */
 	LWLockAcquire(XidGenLock, LW_SHARED);
-	nextXid = ShmemVariableCache->nextXid;
+	nextXid = (TransactionId)pg_atomic_read_u32(&(ShmemVariableCache->nextXid));
 	xidVacLimit = ShmemVariableCache->xidVacLimit;
 	oldestXid = ShmemVariableCache->oldestXid;
 	oldestXidDB = ShmemVariableCache->oldestXidDB;
