@@ -633,6 +633,16 @@ pgbench <optional> <replaceable>options</replaceable> </optional> <replaceable>d
      </varlistentry>
 
      <varlistentry>
+       <term><option>-X</option></term>
+       <term><option>--xa-transaction</option></term>
+       <listitem>
+        <para>
+         Use 2-phase commit for the transactions.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
       <term><option>-v</option></term>
       <term><option>--vacuum-all</option></term>
       <listitem>
@@ -803,7 +813,12 @@ pgbench <optional> <replaceable>options</replaceable> </optional> <replaceable>d
   </orderedlist>
 
   <para>
-   If you select the <literal>simple-update</literal> built-in (also <option>-N</option>),
+   If you select the <literal>tpcb-2pc-like</> built-in (also <option>-X</>),
+   step 7 is changed to use a 2-phase commit setup (<xref linkend="SQL-PREPARE-TRANSACTION"> and <xref linkend="SQL-COMMIT-PREPARED">).
+  </para>
+
+  <para>
+   If you select the <literal>simple-update</> built-in (also <option>-N</>),
    steps 4 and 5 aren't included in the transaction.
    This will avoid update contention on these tables, but
    it makes the test case even less like TPC-B.

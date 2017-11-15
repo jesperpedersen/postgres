@@ -484,6 +484,22 @@ static const BuiltinScript builtin_script[] =
 		"<builtin: select only>",
 		"\\set aid random(1, " CppAsString2(naccounts) " * :scale)\n"
 		"SELECT abalance FROM pgbench_accounts WHERE aid = :aid;\n"
+	},
+	{
+		"tpcb-2pc-like",
+		"<builtin: TPC-B (sort of) with 2-phase commit>",
+		"\\set aid random(1, " CppAsString2(naccounts) " * :scale)\n"
+		"\\set bid random(1, " CppAsString2(nbranches) " * :scale)\n"
+		"\\set tid random(1, " CppAsString2(ntellers) " * :scale)\n"
+		"\\set delta random(-5000, 5000)\n"
+		"BEGIN;\n"
+		"UPDATE pgbench_accounts SET abalance = abalance + :delta WHERE aid = :aid;\n"
+		"SELECT abalance FROM pgbench_accounts WHERE aid = :aid;\n"
+		"UPDATE pgbench_tellers SET tbalance = tbalance + :delta WHERE tid = :tid;\n"
+		"UPDATE pgbench_branches SET bbalance = bbalance + :delta WHERE bid = :bid;\n"
+		"INSERT INTO pgbench_history (tid, bid, aid, delta, mtime) VALUES (:tid, :bid, :aid, :delta, CURRENT_TIMESTAMP);\n"
+		"PREPARE TRANSACTION ':client_id';\n"
+		"COMMIT PREPARED ':client_id';\n"
 	}
 };
 
@@ -557,6 +573,7 @@ usage(void)
 		   "  -t, --transactions=NUM   number of transactions each client runs (default: 10)\n"
 		   "  -T, --time=NUM           duration of benchmark test in seconds\n"
 		   "  -v, --vacuum-all         vacuum all four standard tables before tests\n"
+		   "  -X, --xa-transaction     use 2-phase commit transactions\n"
 		   "  --aggregate-interval=NUM aggregate data over NUM seconds\n"
 		   "  --log-prefix=PREFIX      prefix for transaction time log file\n"
 		   "                           (default: \"pgbench_log\")\n"
@@ -4386,6 +4403,7 @@ main(int argc, char **argv)
 		{"transactions", required_argument, NULL, 't'},
 		{"username", required_argument, NULL, 'U'},
 		{"vacuum-all", no_argument, NULL, 'v'},
+		{"xa-transaction", no_argument, NULL, 'X'},
 		/* long-named only options */
 		{"unlogged-tables", no_argument, NULL, 1},
 		{"tablespace", required_argument, NULL, 2},
@@ -4463,7 +4481,7 @@ main(int argc, char **argv)
 	state = (CState *) pg_malloc(sizeof(CState));
 	memset(state, 0, sizeof(CState));
 
-	while ((c = getopt_long(argc, argv, "iI:h:nvp:dqb:SNc:j:Crs:t:T:U:lf:D:F:M:P:R:L:", long_options, &optindex)) != -1)
+	while ((c = getopt_long(argc, argv, "iI:h:nvp:dqb:SNXc:j:Crs:t:T:U:lf:D:F:M:P:R:L:", long_options, &optindex)) != -1)
 	{
 		char	   *script;
 
@@ -4605,6 +4623,11 @@ main(int argc, char **argv)
 				break;
 			case 'N':
 				process_builtin(findBuiltin("simple-update"), 1);
+				benchmarking_option_set = true;
+				internal_script_used = true;
+				break;
+			case 'X':
+				process_builtin(findBuiltin("tpcb-2pc-like"), 1);
 				benchmarking_option_set = true;
 				internal_script_used = true;
 				break;
