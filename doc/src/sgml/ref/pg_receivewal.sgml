@@ -207,6 +207,14 @@ PostgreSQL documentation
         server as a synchronous standby, to ensure that timely feedback is
         sent to the server.
        </para>
+
+       <para>
+        Note, that <application>pg_receivewal</application> doesn't acknowledge
+        that the Write-Ahead Log (<xref linkend="wal-intro"/>) has been applied, so
+        <xref linkend="guc-synchronous-commit"/> needs to have a setting
+        of <literal>remote_write</literal> or lower, if <application>pg_receivewal</application>
+        is the only standby.
+       </para>
       </listitem>
      </varlistentry>
 
