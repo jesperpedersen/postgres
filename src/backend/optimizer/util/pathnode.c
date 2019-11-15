@@ -940,6 +940,7 @@ create_seqscan_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->parallel_safe = rel->consider_parallel;
 	pathnode->parallel_workers = parallel_workers;
 	pathnode->pathkeys = NIL;	/* seqscan has unordered result */
+	pathnode->uniquekeys = NIL;
 
 	cost_seqscan(pathnode, root, rel, pathnode->param_info);
 
@@ -964,6 +965,7 @@ create_samplescan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer
 	pathnode->parallel_safe = rel->consider_parallel;
 	pathnode->parallel_workers = 0;
 	pathnode->pathkeys = NIL;	/* samplescan has unordered result */
+	pathnode->uniquekeys = NIL;
 
 	cost_samplescan(pathnode, root, rel, pathnode->param_info);
 
@@ -1000,6 +1002,7 @@ create_index_path(PlannerInfo *root,
 				  List *indexorderbys,
 				  List *indexorderbycols,
 				  List *pathkeys,
+				  List *uniquekeys,
 				  ScanDirection indexscandir,
 				  bool indexonly,
 				  Relids required_outer,
@@ -1018,6 +1021,7 @@ create_index_path(PlannerInfo *root,
 	pathnode->path.parallel_safe = rel->consider_parallel;
 	pathnode->path.parallel_workers = 0;
 	pathnode->path.pathkeys = pathkeys;
+	pathnode->path.uniquekeys = uniquekeys;
 
 	pathnode->indexinfo = index;
 	pathnode->indexclauses = indexclauses;
@@ -1061,6 +1065,7 @@ create_bitmap_heap_path(PlannerInfo *root,
 	pathnode->path.parallel_safe = rel->consider_parallel;
 	pathnode->path.parallel_workers = parallel_degree;
 	pathnode->path.pathkeys = NIL;	/* always unordered */
+	pathnode->path.uniquekeys = NIL;
 
 	pathnode->bitmapqual = bitmapqual;
 
@@ -1922,6 +1927,7 @@ create_functionscan_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->parallel_safe = rel->consider_parallel;
 	pathnode->parallel_workers = 0;
 	pathnode->pathkeys = pathkeys;
+	pathnode->uniquekeys = NIL;
 
 	cost_functionscan(pathnode, root, rel, pathnode->param_info);
 
@@ -1948,6 +1954,7 @@ create_tablefuncscan_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->parallel_safe = rel->consider_parallel;
 	pathnode->parallel_workers = 0;
 	pathnode->pathkeys = NIL;	/* result is always unordered */
+	pathnode->uniquekeys = NIL;
 
 	cost_tablefuncscan(pathnode, root, rel, pathnode->param_info);
 
@@ -1974,6 +1981,7 @@ create_valuesscan_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->parallel_safe = rel->consider_parallel;
 	pathnode->parallel_workers = 0;
 	pathnode->pathkeys = NIL;	/* result is always unordered */
+	pathnode->uniquekeys = NIL;
 
 	cost_valuesscan(pathnode, root, rel, pathnode->param_info);
 
@@ -1999,6 +2007,7 @@ create_ctescan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer)
 	pathnode->parallel_safe = rel->consider_parallel;
 	pathnode->parallel_workers = 0;
 	pathnode->pathkeys = NIL;	/* XXX for now, result is always unordered */
+	pathnode->uniquekeys = NIL;
 
 	cost_ctescan(pathnode, root, rel, pathnode->param_info);
 
@@ -2025,6 +2034,7 @@ create_namedtuplestorescan_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->parallel_safe = rel->consider_parallel;
 	pathnode->parallel_workers = 0;
 	pathnode->pathkeys = NIL;	/* result is always unordered */
+	pathnode->uniquekeys = NIL;
 
 	cost_namedtuplestorescan(pathnode, root, rel, pathnode->param_info);
 
@@ -2051,6 +2061,7 @@ create_resultscan_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->parallel_safe = rel->consider_parallel;
 	pathnode->parallel_workers = 0;
 	pathnode->pathkeys = NIL;	/* result is always unordered */
+	pathnode->uniquekeys = NIL;
 
 	cost_resultscan(pathnode, root, rel, pathnode->param_info);
 
@@ -2077,6 +2088,7 @@ create_worktablescan_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->parallel_safe = rel->consider_parallel;
 	pathnode->parallel_workers = 0;
 	pathnode->pathkeys = NIL;	/* result is always unordered */
+	pathnode->uniquekeys = NIL;
 
 	/* Cost is the same as for a regular CTE scan */
 	cost_ctescan(pathnode, root, rel, pathnode->param_info);

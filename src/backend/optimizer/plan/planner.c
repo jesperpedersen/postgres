@@ -3657,15 +3657,30 @@ standard_qp_callback(PlannerInfo *root, void *extra)
 	 * much easier, since we know that the parser ensured that one is a
 	 * superset of the other.
 	 */
+	root->query_uniquekeys = NIL;
+
 	if (root->group_pathkeys)
+	{
 		root->query_pathkeys = root->group_pathkeys;
+
+		if (!root->parse->hasAggs)
+			root->query_uniquekeys = build_uniquekeys(root, qp_extra->groupClause);
+	}
 	else if (root->window_pathkeys)
 		root->query_pathkeys = root->window_pathkeys;
 	else if (list_length(root->distinct_pathkeys) >
 			 list_length(root->sort_pathkeys))
+	{
 		root->query_pathkeys = root->distinct_pathkeys;
+		root->query_uniquekeys = build_uniquekeys(root, parse->distinctClause);
+	}
 	else if (root->sort_pathkeys)
+	{
 		root->query_pathkeys = root->sort_pathkeys;
+
+		if (root->distinct_pathkeys)
+			root->query_uniquekeys = build_uniquekeys(root, parse->distinctClause);
+	}
 	else
 		root->query_pathkeys = NIL;
 }
@@ -6222,7 +6237,7 @@ plan_cluster_use_sort(Oid tableOid, Oid indexOid)
 
 	/* Estimate the cost of index scan */
 	indexScanPath = create_index_path(root, indexInfo,
-									  NIL, NIL, NIL, NIL,
+									  NIL, NIL, NIL, NIL, NIL,
 									  ForwardScanDirection, false,
 									  NULL, 1.0, false);
 

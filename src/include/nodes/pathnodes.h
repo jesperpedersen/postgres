@@ -269,6 +269,8 @@ struct PlannerInfo
 
 	List	   *canon_pathkeys; /* list of "canonical" PathKeys */
 
+	List	   *canon_uniquekeys; /* list of "canonical" UniqueKeys */
+
 	List	   *left_join_clauses;	/* list of RestrictInfos for mergejoinable
 									 * outer join clauses w/nonnullable var on
 									 * left */
@@ -296,6 +298,8 @@ struct PlannerInfo
 	List	   *fkey_list;		/* list of ForeignKeyOptInfos */
 
 	List	   *query_pathkeys; /* desired pathkeys for query_planner() */
+
+	List	   *query_uniquekeys; /* unique keys used for the query */
 
 	List	   *group_pathkeys; /* groupClause pathkeys, if any */
 	List	   *window_pathkeys;	/* pathkeys of bottom window, if any */
@@ -1077,6 +1081,15 @@ typedef struct ParamPathInfo
 	List	   *ppi_clauses;	/* join clauses available from outer rels */
 } ParamPathInfo;
 
+/*
+ * UniqueKey
+ */
+typedef struct UniqueKey
+{
+	NodeTag		type;
+
+	EquivalenceClass *eq_clause;	/* equivalence class */
+} UniqueKey;
 
 /*
  * Type "Path" is used as-is for sequential-scan paths, as well as some other
@@ -1106,6 +1119,9 @@ typedef struct ParamPathInfo
  *
  * "pathkeys" is a List of PathKey nodes (see above), describing the sort
  * ordering of the path's output rows.
+ *
+ * "uniquekeys", if not NIL, is a list of UniqueKey nodes (see above),
+ * describing the XXX.
  */
 typedef struct Path
 {
@@ -1129,6 +1145,8 @@ typedef struct Path
 
 	List	   *pathkeys;		/* sort ordering of path's output */
 	/* pathkeys is a List of PathKey nodes; see above */
+
+	List	   *uniquekeys;	/* the unique keys, or NIL if none */
 } Path;
 
 /* Macro for extracting a path's parameterization relids; beware double eval */
