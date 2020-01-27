@@ -3775,6 +3775,23 @@ HoldingBufferPinThatDelaysRecovery(void)
 }
 
 /*
+ * Assert that the buffer is pinned and locked
+ */
+bool
+IsBufferPinnedAndLocked(Buffer buffer)
+{
+	BufferDesc *bufHdr;
+
+	Assert(BufferIsPinned(buffer));
+
+	bufHdr = GetBufferDescriptor(buffer - 1);
+
+	Assert(LWLockHeldByMe(BufferDescriptorGetContentLock(bufHdr)));
+
+	return true;
+}
+
+/*
  * ConditionalLockBufferForCleanup - as above, but don't wait to get the lock
  *
  * We won't loop, but just check once to see if the pin count is OK.  If
